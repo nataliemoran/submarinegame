@@ -1,162 +1,115 @@
-document.addEventListener("DOMContentLoaded", function() {
-    const canvas = document.getElementById("gameCanvas");
-    const context = canvas.getContext("2d");
+let submarine = document.getElementById('submarine');
+let gameScreen = document.getElementById('gameScreen');
+let scoreElement = document.getElementById('score');
+let upButton = document.getElementById('upButton');
+let downButton = document.getElementById('downButton');
+let counter = 0;
+let obstacles = [];
+let score = 0;
+let moveUp = false;
+let moveDown = false;
+var isGameOver = false;
 
-    // Submarine properties
-    const submarineWidth = 120;
-    const submarineHeight = 60;
-    const submarineX = 100;
-    let submarineY = canvas.height / 2;
+upButton.addEventListener('touchstart', () => moveUp = true);
+upButton.addEventListener('touchend', () => moveUp = false);
+downButton.addEventListener('touchstart', () => moveDown = true);
+downButton.addEventListener('touchend', () => moveDown = false);
 
-    // Movement properties
-    const gravity = 2;
-    const submarineJump = -60;
+function startGame() {
+    isGameOver = false;
+    score = 0;
+    document.getElementById('submarine').style.backgroundImage = "url('submarine.png')";
+    document.getElementById('gameScreen').innerHTML = '<div id="submarine"></div>';
+    gameInterval = setInterval(moveGame, 30);
+}
 
-    let submarineImage = new Image();
-    submarineImage.src = "submarine.png"; // Replace with the path to your submarine image
+function gameOver() {
+    clearInterval(gameInterval);
+    isGameOver = true;
+    document.getElementById('submarine').style.backgroundImage = "url('explosion.png')";
+    document.getElementById('submarine').style.width = '200px';
+    document.getElementById('submarine').style.height = '80px';
+    setTimeout(function() {
+        alert('Game Over! Your score was ' + Math.floor(score));
+        window.location.reload();
+    }, 100);
+}
 
-    // Load submarine image
-    submarineImage.onload = function() {
-        render();
-    };
+function gameLoop() {
+  // Move submarine
+  let top = parseInt(submarine.style.top);
+  if (isNaN(top)) top = gameScreen.offsetHeight / 2;
+  if (moveUp) top -= 5; 
+  if (moveDown) top += 5; 
+  submarine.style.top = `${top}px`;
 
-    const oceanImage = new Image();
-    oceanImage.src = "ocean-background.png"; // Replace with the path to your submarine image
+  // Generate obstacles
+  if (counter % 100 === 0) {
+    let obstacleTop = document.createElement('div');
+    obstacleTop.classList.add('obstacle');
+    obstacleTop.style.top = '0';
+    obstacleTop.style.height = `${Math.random() * gameScreen.offsetHeight / 2}px`;
+    gameScreen.appendChild(obstacleTop);
 
-    // Load submarine image
-    oceanImage.onload = function() {
-        render();
-    };
+    let obstacleBottom = document.createElement('div');
+    obstacleBottom.classList.add('obstacle');
+    obstacleBottom.style.bottom = '0';
+    obstacleBottom.style.height = `${Math.random() * gameScreen.offsetHeight / 2}px`;
+    gameScreen.appendChild(obstacleBottom);
 
-    // Pipe properties
-    const pipeWidth = 80;
-    const pipeHeight = 150;
-    const pipeGap = 300;
-    const pipeSpeed = 3;
-    let pipes = [];
+    obstacles.push(obstacleTop);
+    obstacles.push(obstacleBottom);
+  }
 
-    const pipeImage = new Image();
-    pipeImage.src = "pipesImage.png";
+  // Move obstacles
+  for (let obstacle of obstacles) {
+    let right = parseInt(obstacle.style.right);
+    if (isNaN(right)) right = 0;
+    right += 5;
+    obstacle.style.right = `${right}px`;
 
-    // Score
-    let score = 0;
-
-    // Add event listener for submarine jumps
-    document.addEventListener("keydown", function(event) {
-        if (event.code === "Space") {
-            submarineJumpAction();
-        }
-    });
-
-    // Main game loop
-    function gameLoop() {
-        update();
-        render();
-        requestAnimationFrame(gameLoop);
+    // Check collision
+    let rect1 = submarine.getBoundingClientRect();
+    let rect2 = obstacle.getBoundingClientRect();
+    if (rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y) {
+      // Collision detected!
+      gameOver();
     }
 
-    // Update game state
-    function update() {
-        // Update submarine position
-        submarineY += gravity;
-
-        // Generate new pipe
-        if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - pipeGap) {
-            const pipe = {
-                x: canvas.width,
-                y: Math.random() * (canvas.height - pipeHeight)
-            };
-            pipes.push(pipe);
-        }
-
-        // Move pipes
-        pipes.forEach(function(pipe) {
-            pipe.x -= pipeSpeed;
-
-            // Check collision
-            if (submarineX < pipe.x + pipeWidth &&
-                submarineX + submarineWidth > pipe.x &&
-                submarineY < pipe.y + pipeHeight &&
-                submarineY + submarineHeight > pipe.y) {
-                endGame();
-            }
-
-            // Update score
-            if (pipe.x + pipeWidth < submarineX && !pipe.passed) {
-                score++;
-                pipe.passed = true;
-            }
-        });
-
-        // Remove off-screen pipes
-        if (pipes.length > 0 && pipes[0].x + pipeWidth < 0) {
-            pipes.shift();
-        }
-
-        // Check collision with ocean boundaries
-        if (submarineY + submarineHeight > canvas.height || submarineY < 0) {
-            endGame();
-        }
+    // Check if obstacle has been successfully navigated and increase score
+    if (!obstacle.passed && rect1.x > rect2.x + rect2.width) {
+      obstacle.passed = true;
+      //score++;
+      score=score+0.5;
     }
+  }
 
-    // Render game
-    function render() {
-        // Clear canvas
-        context.clearRect(0, 0, canvas.width, canvas.height);
+  // Cleanup offscreen obstacles
+  while (obstacles.length > 0 && parseInt(obstacles[0].style.right) > gameScreen.offsetWidth) {
+    gameScreen.removeChild(obstacles[0]);
+    obstacles.shift();
+  }
 
-        const oceanPattern = context.createPattern(oceanImage, "repeat");
-        context.fillStyle = oceanPattern;
-        context.fillRect(0, 0, canvas.width, canvas.height);
+  // Update the score
+  scoreElement.innerHTML = 'Score: ' + score;
 
-        // Render ocean background
-        context.drawImage(submarineImage, submarineX, submarineY, submarineWidth, submarineHeight);      
+  counter++;
 
-        // Render pipes
-        pipes.forEach(function(pipe) {
-            context.drawImage(pipeImage, pipe.x, pipe.y, pipeWidth, pipeHeight);
-        });
+}
 
-        // Render score
-        context.fillStyle = "#000000";
-        context.font = "24px Arial";
-        context.fillText("Score: " + score, 10, 30);
-    }
+function handleKey(event) {
+  if (event.type === 'keydown') {
+    if (event.code === 'ArrowUp') moveUp = true;
+    if (event.code === 'ArrowDown') moveDown = true;
+  } else if (event.type === 'keyup') {
+    if (event.code === 'ArrowUp') moveUp = false;
+    if (event.code === 'ArrowDown') moveDown = false;
+  }
+}
 
-    // Submarine jump action
-    function submarineJumpAction() {
-        submarineY += submarineJump;
-    }
-
-    // Function to reset submarine position
-    function resetGame() {
-        submarineY = canvas.height / 2;
-        pipes = [];
-        score = 0;
-    }
-
-    // Reload the page to reset the game
-    function restartGame() {
-        location.reload();
-    }
-
-    // Add event listener to reset game when the page is refreshed
-    window.addEventListener("beforeunload", resetGame);
-
-    function switchToExplosionImage() {
-        let explosionImage = new Image();
-        explosionImage.src = "explosion.png"; // Replace with the path to your explosion image
-        explosionImage.onload = function() {
-            submarineImage = explosionImage;
-        };
-    }
-
-    // Add event listener for game over
-    function endGame() {
-        switchToExplosionImage();
-        alert("Game Over! Your score is: " + score);
-        restartGame();
-    }
-
-    // Start the game
-    gameLoop();
-});
+document.addEventListener('keydown', handleKey);
+document.addEventListener('keyup', handleKey);
+let gameInterval = setInterval(gameLoop, 20);
